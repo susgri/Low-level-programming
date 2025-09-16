@@ -2,7 +2,7 @@
 Lab exercises from TDT4258 at NTNU
 
 
-## LABS:
+## Labs
 
 ### Lab 1
 Making a palindrome finder in ARMv7 assembly. 
