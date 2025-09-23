@@ -23,11 +23,11 @@ _start:
 	bl setPixel
 	add r5, r5, #1
 	mov r1, r5
-	ldr r2, =0x07e0 // oransje
+	ldr r2, =0x07e0 
 	bl setPixel
 	sub r4, r4, #1
 	mov r0, r4
-	ldr r2, =0xffe0 // oransje
+	ldr r2, =0xffe0 
 	bl setPixel
 	
 _end:

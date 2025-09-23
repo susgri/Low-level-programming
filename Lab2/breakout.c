@@ -24,6 +24,19 @@ unsigned char tiles[NROWS][NCOLS] __attribute__((used)) = { 0 }; // DON'T TOUCH 
 /***
  * TODO: Define your variables below this comment
  */
+unsigned int ball_xposL = 20;
+unsigned int ball_xposH = 20+7;
+unsigned int ball_ypos = 120;
+
+int ball[7][7] = {
+    {0, 0, 0, 1, 0, 0, 0},
+    {0, 0, 1, 1, 1, 0, 0},
+    {0, 1, 1, 1, 1, 1, 0},
+    {1, 1, 1, 1, 1, 1, 1},
+    {0, 1, 1, 1, 1, 1, 0},
+    {0, 0, 1, 1, 1, 0, 0},
+    {0, 0, 0, 1, 0, 0, 0}
+};
 
 /***
  * You might use and modify the struct/enum definitions below this comment
@@ -64,22 +77,22 @@ void WriteUart(char c);
 asm("ClearScreen: \n\t"
     "    PUSH {LR} \n\t"
     "    PUSH {R4, R5} \n\t"
-    "    MOV R2, #0xFFFF \n\t"
+    "    LDR R2, =0x000ffff \n\t"
     "    LDR R3, =VGAaddress \n\t"
     "    MOV R4, #0 \n\t"
-    "clearScreenLoop: CMP R4, #321 \n\t"
+    "clearScreenLoop: CMP R4, #320 \n\t"
     "    BGE doneLoopX \n\t"
     "    MOV R5, #0 \n\t"
-    "loopY: CMP R5, #241 \n\t"
-    "    BEQ doneLoopY \n\t"
+    "loopY: CMP R5, #240 \n\t"
+    "    BGE doneLoopY \n\t"
     "    MOV R0, R4 \n\t"
     "    MOV R1, R5 \n\t"
     "    BL SetPixel \n\t"
     "    ADD R5, R5, #1 \n\t"
-    "    B loopY"
+    "    B loopY \n\t"
     "doneLoopY: ADD R4, R4, #1 \n\t"
     "     B clearScreenLoop \n\t"
-    "doneLoopX:     "
+    "doneLoopX: \n\t"
     "    POP {R4,R5} \n\t"
     "    POP {LR} \n\t"
     "    BX LR");
@@ -99,24 +112,56 @@ asm("ReadUart:\n\t"
     "LDR R0, [R1]\n\t"
     "BX LR");
 
-// TODO: Add the WriteUart assembly procedure here that respects the WriteUart C declaration on line 46
+asm("WriteUart: \n\t"
+    "LDR R1, =0xFF201000 \n\t"
+    "LDR R2, [R1, #4] \n\t"
+    "LDR R3, =0xffff0000 \n\t"
+    "ANDS R2, R2, R3 \n\t"
+    "BEQ WriteUart \n\t"
+    "STR R0, [R1] \n\t"
+    "BX LR");
 
 // TODO: Implement the C functions below
 // Don't modify any function header
 void draw_block(unsigned int x, unsigned int y, unsigned int width, unsigned int height, unsigned int color)
 {
+    unsigned int x_coord = x;
+    for(int i=0; i<width; i++){
+        unsigned int y_coord = y;
+        for(int j=0; j<height; j++){
+            SetPixel(x_coord, y_coord, color);
+            y_coord++;
+        }
+        x_coord++;
+    }
+
 }
 
 void draw_bar(unsigned int y)
-{
+{   // 7 × 45 pixels
+    draw_block(0, y-22, 7, 15, 0xF337);
+    draw_block(0, (y-22)+15, 7, 15, 0x641E); 
+    draw_block(0, (y-22)+30, 7, 15, 0xF337);
 }
 
 void draw_ball()
-{
+{   
+    // FIXME litt usikker på hvordan jeg skal få tak i posisjonen til ballen
+    int x = ball_xposL;
+    int y = ball_ypos;
+
+    for(int i=0; i<7; i++){
+        for(int j=0; j<7; j++){
+            if(ball[i][j] == 1){
+                SetPixel(x+i, y+j, 0x0000);
+            }
+        }
+    }
 }
 
 void draw_playing_field()
 {
+
 }
 
 void update_game_state()
@@ -135,8 +180,30 @@ void update_game_state()
 }
 
 void update_bar_state()
-{
-    // int remaining = 0;
+{ // FIXME not working yet
+    int readValue = ReadUart();
+    int remaining = readValue & 0x00FF0000;
+    int bar_pos = 0;
+
+    if(readValue & 0x0000FF00){ // if ready bit is set
+        while (remaining != 0){
+            int button = readValue & 0x000000FF; 
+            if (button == 73 && bar_pos <= (height-15)){
+                bar_pos += 15;
+            }
+            else if (button == 77 && bar_pos >= 15){
+                bar_pos -= 15;
+            }
+            
+            readValue = ReadUart();
+            remaining = readValue & 0x00FF0000;
+        }
+
+        
+        draw_bar(bar_pos);
+    }
+    
+    
     // TODO: Read all chars in the UART Buffer and apply the respective bar position updates
     // HINT: w == 77, s == 73
     // HINT Format: 0x00 'Remaining Chars':2 'Ready 0x80':2 'Char 0xXX':2, sample: 0x00018077 (1 remaining character, buffer is ready, current character is 'w')
@@ -144,7 +211,14 @@ void update_bar_state()
 
 void write(char *str)
 {
-    // TODO: Use WriteUart to write the string to JTAG UART
+    int index = 0;
+    char character = str[index];
+
+    while(character != 0){
+        WriteUart(character);
+        index++;
+        character = str[index];
+    }
 }
 
 void play()
@@ -206,17 +280,20 @@ void wait_for_start()
 int main(int argc, char *argv[])
 {
     ClearScreen();
+    draw_ball();
+    draw_bar(120);
 
     // HINT: This loop allows the user to restart the game after loosing/winning the previous game
     while (1)
     {
-        wait_for_start();
-        play();
-        reset();
-        if (currentState == Exit)
-        {
-            break;
-        }
+        update_bar_state();
+        // wait_for_start();
+        // play();
+        // reset();
+        // if (currentState == Exit)
+        // {
+        //     break;
+        // }
     }
     return 0;
 }
