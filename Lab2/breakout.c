@@ -5,12 +5,12 @@ unsigned long long __attribute__((used)) VGAaddress = 0xc8000000; // Memory stor
 unsigned int __attribute__((used)) red = 0x0000F0F0;
 unsigned int __attribute__((used)) green = 0x00000F0F;
 unsigned int __attribute__((used)) blue = 0x000000FF;
-unsigned int __attribute__((used)) white = 0x0000FFFF;
+unsigned int __attribute__((used)) white = 0xFFFF;
 unsigned int __attribute__((used)) black = 0x0;
 
 // Don't change the name of this variables
 #define NCOLS 10 // <- Supported value range: [1,18]
-#define NROWS 14 // <- This variable might change.
+#define NROWS 16 // <- This variable might change.
 #define TILE_SIZE 15 // <- Tile size, might change.
 
 char *won = "You Won";       // DON'T TOUCH THIS - keep the string as is
@@ -24,9 +24,7 @@ unsigned char tiles[NROWS][NCOLS] __attribute__((used)) = { 0 }; // DON'T TOUCH 
 /***
  * TODO: Define your variables below this comment
  */
-unsigned int ball_xposL = 20;
-unsigned int ball_xposH = 20+7;
-unsigned int ball_ypos = 120;
+unsigned int colors[6] = {0x641E, 0xF337, 0x87CC, 0xF20A, 0xF70C, 0x67DD};
 
 int ball[7][7] = {
     {0, 0, 0, 1, 0, 0, 0},
@@ -41,6 +39,23 @@ int ball[7][7] = {
 /***
  * You might use and modify the struct/enum definitions below this comment
  */
+typedef struct _ball // FIXME er dette lov?
+{
+    unsigned int pos_x;
+    unsigned int pos_y;
+    unsigned int diameter;
+    unsigned int angle;
+} Ball;
+Ball gameBall = {20, 120, 7, 90};
+
+typedef struct _bar
+{
+    const unsigned int pos_x;
+    unsigned int pos_y;
+
+} Bar;
+Bar gameBar = {0, 120};
+ 
 typedef struct _block
 {
     unsigned char destroyed;
@@ -77,7 +92,7 @@ void WriteUart(char c);
 asm("ClearScreen: \n\t"
     "    PUSH {LR} \n\t"
     "    PUSH {R4, R5} \n\t"
-    "    LDR R2, =0x000ffff \n\t"
+    "    LDR R2, =0xFFFF \n\t"
     "    LDR R3, =VGAaddress \n\t"
     "    MOV R4, #0 \n\t"
     "clearScreenLoop: CMP R4, #320 \n\t"
@@ -139,21 +154,22 @@ void draw_block(unsigned int x, unsigned int y, unsigned int width, unsigned int
 
 void draw_bar(unsigned int y)
 {   // 7 × 45 pixels
-    draw_block(0, y-22, 7, 15, 0xF337);
-    draw_block(0, (y-22)+15, 7, 15, 0x641E); 
-    draw_block(0, (y-22)+30, 7, 15, 0xF337);
+    draw_block(0, 0, 7, height, white);
+    draw_block(gameBar.pos_x, y-22, 7, 15, 0xF337);
+    draw_block(gameBar.pos_x, (y-22)+15, 7, 15, 0x641E); 
+    draw_block(gameBar.pos_x, (y-22)+30, 7, 15, 0xF337);
 }
 
 void draw_ball()
 {   
-    // FIXME litt usikker på hvordan jeg skal få tak i posisjonen til ballen
-    int x = ball_xposL;
-    int y = ball_ypos;
+    // FIXME kan jeg lagre ballen slik?
+    int x = gameBall.pos_x;
+    int y = gameBall.pos_y;
 
-    for(int i=0; i<7; i++){
-        for(int j=0; j<7; j++){
+    for(int i=0; i<gameBall.diameter; i++){
+        for(int j=0; j<gameBall.diameter; j++){
             if(ball[i][j] == 1){
-                SetPixel(x+i, y+j, 0x0000);
+                SetPixel(x+i, y+j, black);
             }
         }
     }
@@ -161,6 +177,31 @@ void draw_ball()
 
 void draw_playing_field()
 {
+    const int numColors = 6;
+    int color_index = 0;
+
+    int x_pos = 320-(15*NCOLS);
+
+    for(int i=0; i<NCOLS; i++){
+        int y_pos = 0;
+
+        for(int j=0; j<NROWS; j++){
+            if(!tiles[i][j]){
+                draw_block(x_pos, y_pos, TILE_SIZE, TILE_SIZE, white);
+                draw_block(x_pos+1, y_pos+1, TILE_SIZE-2, TILE_SIZE-2, colors[color_index]);
+            }
+            y_pos += TILE_SIZE;
+
+            if(color_index == (numColors-1)){
+                color_index = 0;
+            }
+            else{
+                color_index++;
+            }
+            
+        }
+        x_pos += TILE_SIZE;
+    }
 
 }
 
@@ -171,7 +212,25 @@ void update_game_state()
         return;
     }
 
-    // TODO: Check: game won? game lost?
+    if(gameBall.pos_x < 7){
+        currentState = Lost;
+        return;
+    }
+
+    if(gameBall.pos_x == 320){
+        currentState = Won;
+        return;
+    }
+
+    // if direction = 90: only add to x direction of ball
+    // if direction = 45: add to x and sub to y equally
+    // if firection = 135: add to y and x direction equally
+    // if direftion = 315: sub y and x equally
+    // if direction = 270: only sub x 
+    // if direction = 225: sub to x and add to y euqually 
+
+
+    
 
     // TODO: Update balls position and direction
 
@@ -183,24 +242,22 @@ void update_bar_state()
 { // FIXME not working yet
     int readValue = ReadUart();
     int remaining = readValue & 0x00FF0000;
-    int bar_pos = 0;
 
     if(readValue & 0x0000FF00){ // if ready bit is set
         while (remaining != 0){
             int button = readValue & 0x000000FF; 
-            if (button == 73 && bar_pos <= (height-15)){
-                bar_pos += 15;
+            if (button == 73 && gameBar.pos_y <= (height-15)){
+                gameBar.pos_y += 15;
             }
-            else if (button == 77 && bar_pos >= 15){
-                bar_pos -= 15;
+            else if (button == 77 && gameBar.pos_y >= 15){
+                gameBar.pos_y -= 15;
             }
             
+            draw_bar(gameBar.pos_y);
             readValue = ReadUart();
             remaining = readValue & 0x00FF0000;
         }
 
-        
-        draw_bar(bar_pos);
     }
     
     
@@ -235,7 +292,7 @@ void play()
         }
         draw_playing_field();
         draw_ball();
-        draw_bar(120); // TODO: replace the constant value with the current position of the bar
+        draw_bar(gameBar.pos_y); // TODO: replace the constant value with the current position of the bar
     }
     if (currentState == Won)
     {
@@ -274,14 +331,27 @@ void reset()
 
 void wait_for_start()
 {
-    // TODO: Implement waiting behaviour until the user presses either w/s
+    int readValue = ReadUart();
+    int remaining = readValue & 0x00FF0000;
+
+    if(readValue & 0x0000FF00){ // if ready bit is set
+        while (remaining != 0){
+            int button = readValue & 0x000000FF; 
+            if (button == 73 || button == 77){
+                currentState = Running;
+                return;
+            }
+        }
+    }
+
 }
 
 int main(int argc, char *argv[])
 {
     ClearScreen();
     draw_ball();
-    draw_bar(120);
+    draw_bar(gameBar.pos_y);
+    draw_playing_field();
 
     // HINT: This loop allows the user to restart the game after loosing/winning the previous game
     while (1)
