@@ -22,7 +22,7 @@ unsigned char tiles[NROWS][NCOLS] __attribute__((used)) = { 0 }; // DON'T TOUCH 
 /**************************************************************************************************/
 
 /***
- * TODO: Define your variables below this comment
+ * Variable definitions below this comment
  */
 // {blue, pink, red, green, yellow , cyan}
 unsigned int colors[6] = {0x641E, 0xF337, 0x87CC, 0xF20A, 0xF70C, 0x67DD};
@@ -40,7 +40,7 @@ int ballShape[7][7] = {
 /***
  * You might use and modify the struct/enum definitions below this comment
  */
-typedef struct _ball // FIXME er dette lov?
+typedef struct _ball 
 {
     unsigned int pos_x;
     unsigned int pos_y;
@@ -142,7 +142,6 @@ asm("WriteUart: \n\t"
     "STR R0, [R1] \n\t"
     "BX LR");
 
-// TODO: Implement the C functions below
 // Don't modify any function header
 void draw_block(unsigned int x, unsigned int y, unsigned int width, unsigned int height, unsigned int color)
 {
@@ -295,11 +294,6 @@ void update_game_state()
         break;
     }
 
-    
-    // TODO: Update balls position and direction - does it work?
-
-    // FIXME: Hit Check with Blocks - does not work quite yet 
-
     const unsigned int num_collision_pnts = 4;
     unsigned int collision_points[4][2] = {
         {gameBall.pos_x+gameBall.diameter-1, gameBall.pos_y + gameBall.diameter/2},
@@ -308,6 +302,7 @@ void update_game_state()
         {gameBall.pos_x, gameBall.pos_y+gameBall.diameter/2}
     };
 
+    // check if ball is hitting one or more blocks 
     if(gameBall.pos_x+gameBall.diameter-1 >= width - NCOLS*TILE_SIZE){
         for(int i = 0; i < num_collision_pnts; i++){
             unsigned int x_pnt = collision_points[i][0];
@@ -356,6 +351,7 @@ void update_game_state()
         }
     }
     else{
+        // check if ball is hitting the bar
         if(gameBall.pos_x == gameBar.pos_x+gameBar.width){
             if(gameBall.pos_y >= (gameBar.pos_y - gameBar.height/2) && gameBall.pos_y <= (gameBar.pos_y + gameBar.height/2)){
                 if(gameBall.pos_y < ((gameBar.pos_y - gameBar.height/2) + gameBar.height/3)){
@@ -370,6 +366,7 @@ void update_game_state()
             }
         }
     }
+    // check if ball is hitting the walls
     if(gameBall.pos_y == 0 || gameBall.pos_y+gameBall.diameter == height){
         
             switch (gameBall.angle)
@@ -469,6 +466,10 @@ void play()
 // It must initialize the game
 void reset()
 {
+
+    if (currentState == Exit) return; 
+
+    write("Resetting...\n");
     // Hint: This is draining the UART buffer
     int remaining = 0;
     
@@ -478,7 +479,7 @@ void reset()
         if (!(out & 0x8000))
         {
             // not valid - abort reading
-            return;
+            break;
         }
         remaining = (out & 0xFF0000) >> 16;
     } while (remaining > 0);
@@ -491,22 +492,20 @@ void reset()
     gameBall.pos_x = 120;
     gameBall.pos_x = 40;
 
-
     // reset all tiles as non-destroyed 
-    for(int i=0; i<NCOLS; i++){
-        for(int j=0; j<NROWS; j++){
+    for(int i=0; i<NROWS; i++){
+        for(int j=0; j<NCOLS; j++){
             tiles[i][j] = 0;
         }
     }
     
     ClearScreen();
     currentState = Stopped;
-
-    // TODO: Any other resets?
 }
 
 void wait_for_start()
 {
+    write("Write 'w' or 's' to start the game.\nWrite 'e' to exit.\n");
     while (1) {
         int readValue = ReadUart();
         int readyBit = readValue & 0x8000;
@@ -516,8 +515,13 @@ void wait_for_start()
             
             while (remaining >= 0) {
                 int button = readValue & 0x000000FF; 
-                if (button == 0x73 || button == 0x77){
+                if (button == 'w' || button == 's'){
                     currentState = Running;
+                    write("Started the game!\n");
+                    return;
+                }
+                else if (button == 'e'){
+                    currentState = Exit;
                     return;
                 }
                 
@@ -539,6 +543,7 @@ int main(int argc, char *argv[])
         reset();
         if (currentState == Exit)
         {
+            write("Exited the game\n");
             break;
         }
     }
