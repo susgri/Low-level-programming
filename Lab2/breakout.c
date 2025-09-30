@@ -24,9 +24,10 @@ unsigned char tiles[NROWS][NCOLS] __attribute__((used)) = { 0 }; // DON'T TOUCH 
 /***
  * TODO: Define your variables below this comment
  */
+// {blue, pink, red, green, yellow , cyan}
 unsigned int colors[6] = {0x641E, 0xF337, 0x87CC, 0xF20A, 0xF70C, 0x67DD};
 
-int ball[7][7] = {
+int ballShape[7][7] = {
     {0, 0, 0, 1, 0, 0, 0},
     {0, 0, 1, 1, 1, 0, 0},
     {0, 1, 1, 1, 1, 1, 0},
@@ -43,18 +44,23 @@ typedef struct _ball // FIXME er dette lov?
 {
     unsigned int pos_x;
     unsigned int pos_y;
+    unsigned int old_pos_x;
+    unsigned int old_pos_y;
     unsigned int diameter;
     unsigned int angle;
 } Ball;
-Ball gameBall = {20, 120, 7, 90};
+Ball gameBall = {20, 120, 21, 120, 7, 270};
 
 typedef struct _bar
 {
-    const unsigned int pos_x;
+    unsigned int pos_x;
     unsigned int pos_y;
+    unsigned int height;
+    unsigned int width;
+    unsigned int changePos;
 
 } Bar;
-Bar gameBar = {0, 120};
+Bar gameBar = {0, 120, 45, 7, 0};
  
 typedef struct _block
 {
@@ -153,22 +159,35 @@ void draw_block(unsigned int x, unsigned int y, unsigned int width, unsigned int
 }
 
 void draw_bar(unsigned int y)
-{   // 7 × 45 pixels
-    draw_block(0, 0, 7, height, white);
-    draw_block(gameBar.pos_x, y-22, 7, 15, 0xF337);
-    draw_block(gameBar.pos_x, (y-22)+15, 7, 15, 0x641E); 
-    draw_block(gameBar.pos_x, (y-22)+30, 7, 15, 0xF337);
+{
+    unsigned int topOfBar = y - (gameBar.height/2);
+    if(gameBar.changePos){
+        draw_block(0, 0, gameBar.width, height, white);
+        gameBar.changePos = 0;
+    }
+    draw_block(gameBar.pos_x, topOfBar, gameBar.width, gameBar.height/3, 0xF337);
+    draw_block(gameBar.pos_x, topOfBar+gameBar.height/3, gameBar.width, gameBar.height/3, 0x641E); 
+    draw_block(gameBar.pos_x, topOfBar+2*gameBar.height/3, gameBar.width, gameBar.height/3, 0xF337);
 }
 
 void draw_ball()
 {   
-    // FIXME kan jeg lagre ballen slik?
     int x = gameBall.pos_x;
     int y = gameBall.pos_y;
 
+    // remove old drawing of ball
     for(int i=0; i<gameBall.diameter; i++){
         for(int j=0; j<gameBall.diameter; j++){
-            if(ball[i][j] == 1){
+            if(ballShape[i][j] == 1){
+                SetPixel(gameBall.old_pos_x+i, gameBall.old_pos_y+j, white);
+            }
+        }
+    }
+
+    // draw ball in new position
+    for(int i=0; i<gameBall.diameter; i++){
+        for(int j=0; j<gameBall.diameter; j++){
+            if(ballShape[i][j] == 1){
                 SetPixel(x+i, y+j, black);
             }
         }
@@ -186,9 +205,12 @@ void draw_playing_field()
         int y_pos = 0;
 
         for(int j=0; j<NROWS; j++){
-            if(!tiles[i][j]){
-                draw_block(x_pos, y_pos, TILE_SIZE, TILE_SIZE, white);
+            if(!tiles[j][i]){
                 draw_block(x_pos+1, y_pos+1, TILE_SIZE-2, TILE_SIZE-2, colors[color_index]);
+            }
+            else if (tiles[j][i] == 'h'){
+                draw_block(x_pos+1, y_pos+1, TILE_SIZE-2, TILE_SIZE-2, white);
+                tiles[j][i] = 'x';
             }
             y_pos += TILE_SIZE;
 
@@ -221,47 +243,182 @@ void update_game_state()
         currentState = Won;
         return;
     }
-
-    // if direction = 90: only add to x direction of ball
-    // if direction = 45: add to x and sub to y equally
-    // if firection = 135: add to y and x direction equally
-    // if direftion = 315: sub y and x equally
-    // if direction = 270: only sub x 
-    // if direction = 225: sub to x and add to y euqually 
-
+    
+    switch (gameBall.angle)
+    {
+    case 0:
+    case 360:
+        gameBall.old_pos_x = gameBall.pos_x;
+        gameBall.old_pos_y = gameBall.pos_y;
+        gameBall.pos_y--;
+        break;
+    case 45:
+        gameBall.old_pos_x = gameBall.pos_x;
+        gameBall.old_pos_y = gameBall.pos_y;
+        gameBall.pos_x++;
+        gameBall.pos_y--;
+        break;
+    case 90:
+        gameBall.old_pos_x = gameBall.pos_x;
+        gameBall.old_pos_y = gameBall.pos_y;
+        gameBall.pos_x++;
+        break;
+    case 135:
+        gameBall.old_pos_x = gameBall.pos_x;
+        gameBall.old_pos_y = gameBall.pos_y;
+        gameBall.pos_x++;
+        gameBall.pos_y++;
+        break;
+    case 180:
+        gameBall.old_pos_x = gameBall.pos_x;
+        gameBall.old_pos_y = gameBall.pos_y;
+        gameBall.pos_y++;
+        break;
+    case 225:
+        gameBall.old_pos_x = gameBall.pos_x;
+        gameBall.old_pos_y = gameBall.pos_y;
+        gameBall.pos_x--;
+        gameBall.pos_y++;
+        break;
+    case 270:
+        gameBall.old_pos_x = gameBall.pos_x;
+        gameBall.old_pos_y = gameBall.pos_y;
+        gameBall.pos_x--;
+        break;
+    case 315:
+        gameBall.old_pos_x = gameBall.pos_x;
+        gameBall.old_pos_y = gameBall.pos_y;
+        gameBall.pos_x--;
+        gameBall.pos_y--;
+        break;
+    default:
+        break;
+    }
 
     
+    // TODO: Update balls position and direction - does it work?
 
-    // TODO: Update balls position and direction
+    // FIXME: Hit Check with Blocks - does not work quite yet 
 
-    // TODO: Hit Check with Blocks
+    const unsigned int num_collision_pnts = 4;
+    unsigned int collision_points[4][2] = {
+        {gameBall.pos_x+gameBall.diameter-1, gameBall.pos_y + gameBall.diameter/2},
+        {gameBall.pos_x+gameBall.diameter/2, gameBall.pos_y+gameBall.diameter-1},
+        {gameBall.pos_x+gameBall.diameter/2, gameBall.pos_y},
+        {gameBall.pos_x, gameBall.pos_y+gameBall.diameter/2}
+    };
+
+    if(gameBall.pos_x+gameBall.diameter-1 >= width - NCOLS*TILE_SIZE){
+        for(int i = 0; i < num_collision_pnts; i++){
+            unsigned int x_pnt = collision_points[i][0];
+            unsigned int y_pnt = collision_points[i][1];
+
+            // Finding out which block the ball can hit
+            unsigned int x_indx = (x_pnt - (width - TILE_SIZE*NCOLS)) / TILE_SIZE;
+            unsigned int y_indx = y_pnt / TILE_SIZE;
+
+            if (x_indx < NCOLS && x_indx >= 0 && y_indx < NROWS && y_indx >= 0 && !tiles[y_indx][x_indx]){
+                tiles[y_indx][x_indx] = 'h'; // mark block as hit
+                switch (gameBall.angle){
+                    case 360:
+                    case 0: gameBall.angle = 180; break;
+                    case 45: gameBall.angle = 315; break;
+                    case 90: gameBall.angle = 270; break;
+                    case 135: gameBall.angle = 225; break;
+                    case 180: gameBall.angle = 0; break;
+                    case 225: gameBall.angle = 135; break;
+                    case 270: gameBall.angle = 90; break;
+                    case 315: gameBall.angle = 45; break;
+                    default: break;
+                }
+
+
+                // check if ball hit border with neighbour block
+                unsigned int check_neighbour_y = y_pnt % TILE_SIZE;
+                unsigned int check_neighbour_x = (x_pnt - (width - TILE_SIZE*NCOLS)) % TILE_SIZE;
+
+                if(check_neighbour_y == 0 && y_indx < NROWS-1){
+                    if(!tiles[y_indx-1][x_indx]) tiles[y_indx-1][x_indx] = 'h';
+                }
+                else if(check_neighbour_y == TILE_SIZE - 1 && y_indx > 0){
+                    if (!tiles[y_indx+1][x_indx]) tiles[y_indx+1][x_indx] = 'h';
+                }
+
+                if(check_neighbour_x == 0 && x_indx > 0){
+                    if (!tiles[y_indx][x_indx-1]) tiles[y_indx][x_indx+1] = 'h';
+                }
+                else if(check_neighbour_x == TILE_SIZE-1 && x_indx < NCOLS-1){
+
+                    if (!tiles[y_indx][x_indx+1]) tiles[y_indx][x_indx-1] = 'h';
+                }
+                
+            }            
+        }
+    }
+    else{
+        if(gameBall.pos_x == gameBar.pos_x+gameBar.width){
+            if(gameBall.pos_y >= (gameBar.pos_y - gameBar.height/2) && gameBall.pos_y <= (gameBar.pos_y + gameBar.height/2)){
+                if(gameBall.pos_y < ((gameBar.pos_y - gameBar.height/2) + gameBar.height/3)){
+                    gameBall.angle = 45;
+                }
+                else if(gameBall.pos_y < ((gameBar.pos_y - gameBar.height/2) + 2*gameBar.height/3)){
+                    gameBall.angle = 90;
+                }
+                else{
+                    gameBall.angle = 135;
+                }
+            }
+        }
+    }
+    if(gameBall.pos_y == 0 || gameBall.pos_y+gameBall.diameter == height){
+        
+            switch (gameBall.angle)
+            {
+            case 45:
+            case 225:
+                gameBall.angle += 90;
+                break;
+            case 135:
+            case 315:
+                gameBall.angle -= 90;
+                break;
+            default:
+                gameBall.angle += 180;
+                if (gameBall.angle > 360)
+                {
+                    gameBall.angle -= 360;
+                }
+                break;
+            }
+        }
     // HINT: try to only do this check when we potentially have a hit, as it is relatively expensive and can slow down game play a lot
 }
 
-void update_bar_state()
-{ // FIXME not working yet
+void update_bar_state() {
     int readValue = ReadUart();
-    int remaining = readValue & 0x00FF0000;
+    int remaining = (readValue & 0xFF0000) >> 16;
 
-    if(readValue & 0x0000FF00){ // if ready bit is set
-        while (remaining != 0){
-            int button = readValue & 0x000000FF; 
-            if (button == 73 && gameBar.pos_y <= (height-15)){
-                gameBar.pos_y += 15;
-            }
-            else if (button == 77 && gameBar.pos_y >= 15){
-                gameBar.pos_y -= 15;
-            }
-            
-            draw_bar(gameBar.pos_y);
-            readValue = ReadUart();
-            remaining = readValue & 0x00FF0000;
+    if(!(readValue & 0x8000)){ // if ready bit is set
+        return;
+    }   
+
+    while (remaining >= 0){
+        int button = readValue & 0x000000FF; 
+        if (button == 's' && (gameBar.pos_y+gameBar.height/2) <= (height-15)){
+            gameBar.pos_y += 15;
+            gameBar.changePos = 1;
+            break;
         }
-
+        else if (button == 'w' && (gameBar.pos_y-gameBar.height/2) >= 15){
+            gameBar.pos_y -= 15;
+            gameBar.changePos = 1;
+            break;
+        }
+        readValue = ReadUart();
+        if(!(readValue & 0x8000)) break;
+        remaining = (readValue & 0xFF0000) >> 16;
     }
-    
-    
-    // TODO: Read all chars in the UART Buffer and apply the respective bar position updates
+
     // HINT: w == 77, s == 73
     // HINT Format: 0x00 'Remaining Chars':2 'Ready 0x80':2 'Char 0xXX':2, sample: 0x00018077 (1 remaining character, buffer is ready, current character is 'w')
 }
@@ -292,7 +449,7 @@ void play()
         }
         draw_playing_field();
         draw_ball();
-        draw_bar(gameBar.pos_y); // TODO: replace the constant value with the current position of the bar
+        draw_bar(gameBar.pos_y);
     }
     if (currentState == Won)
     {
@@ -313,57 +470,77 @@ void play()
 void reset()
 {
     // Hint: This is draining the UART buffer
-    // int remaining = 0;
+    int remaining = 0;
     
-    // do
-    // {
-    //     unsigned long long out = ReadUart();
-    //     if (!(out & 0x8000))
-    //     {
-    //         // not valid - abort reading
-    //         return;
-    //     }
-    //     remaining = (out & 0xFF0000) >> 4;
-    // } while (remaining > 0);
+    do
+    {
+        unsigned long long out = ReadUart();
+        if (!(out & 0x8000))
+        {
+            // not valid - abort reading
+            return;
+        }
+        remaining = (out & 0xFF0000) >> 16;
+    } while (remaining > 0);
 
-    // TODO: You might want to reset other state in here
+
+    // reset bar and ball position/angle
+    gameBar.pos_y = 120;
+    gameBar.changePos = 0;
+    gameBall.angle = 270;
+    gameBall.pos_x = 120;
+    gameBall.pos_x = 40;
+
+
+    // reset all tiles as non-destroyed 
+    for(int i=0; i<NCOLS; i++){
+        for(int j=0; j<NROWS; j++){
+            tiles[i][j] = 0;
+        }
+    }
+    
+    ClearScreen();
+    currentState = Stopped;
+
+    // TODO: Any other resets?
 }
 
 void wait_for_start()
 {
-    int readValue = ReadUart();
-    int remaining = readValue & 0x00FF0000;
-
-    if(readValue & 0x0000FF00){ // if ready bit is set
-        while (remaining != 0){
-            int button = readValue & 0x000000FF; 
-            if (button == 73 || button == 77){
-                currentState = Running;
-                return;
+    while (1) {
+        int readValue = ReadUart();
+        int readyBit = readValue & 0x8000;
+        
+        if(readyBit){ // if ready bit is set
+            int remaining = (readValue & 0xFF0000) >> 16;
+            
+            while (remaining >= 0) {
+                int button = readValue & 0x000000FF; 
+                if (button == 0x73 || button == 0x77){
+                    currentState = Running;
+                    return;
+                }
+                
+                // Read next value
+                readValue = ReadUart();
+                remaining = (readValue & 0xFF0000) >> 16;
             }
         }
     }
-
 }
 
 int main(int argc, char *argv[])
 {
-    ClearScreen();
-    draw_ball();
-    draw_bar(gameBar.pos_y);
-    draw_playing_field();
-
     // HINT: This loop allows the user to restart the game after loosing/winning the previous game
     while (1)
     {
-        update_bar_state();
-        // wait_for_start();
-        // play();
-        // reset();
-        // if (currentState == Exit)
-        // {
-        //     break;
-        // }
+        wait_for_start();
+        play();
+        reset();
+        if (currentState == Exit)
+        {
+            break;
+        }
     }
     return 0;
 }
