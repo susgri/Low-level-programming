@@ -60,7 +60,7 @@ typedef struct _bar
     unsigned int changePos;
 
 } Bar;
-Bar gameBar = {0, 120, 45, 7, 0};
+Bar gameBar = {0, 120, 45, 7, 1};
  
 typedef struct _block
 {
@@ -162,17 +162,18 @@ void draw_bar(unsigned int y)
     unsigned int topOfBar = y - (gameBar.height/2);
     if(gameBar.changePos){
         draw_block(0, 0, gameBar.width, height, white);
+        draw_block(gameBar.pos_x, topOfBar, gameBar.width, gameBar.height/3, 0xF337);
+        draw_block(gameBar.pos_x, topOfBar+gameBar.height/3, gameBar.width, gameBar.height/3, 0x641E); 
+        draw_block(gameBar.pos_x, topOfBar+2*gameBar.height/3, gameBar.width, gameBar.height/3, 0xF337);
         gameBar.changePos = 0;
     }
-    draw_block(gameBar.pos_x, topOfBar, gameBar.width, gameBar.height/3, 0xF337);
-    draw_block(gameBar.pos_x, topOfBar+gameBar.height/3, gameBar.width, gameBar.height/3, 0x641E); 
-    draw_block(gameBar.pos_x, topOfBar+2*gameBar.height/3, gameBar.width, gameBar.height/3, 0xF337);
 }
 
 void draw_ball()
 {   
     int x = gameBall.pos_x;
     int y = gameBall.pos_y;
+
 
     // remove old drawing of ball
     for(int i=0; i<gameBall.diameter; i++){
@@ -198,7 +199,7 @@ void draw_playing_field()
     const int numColors = 6;
     int color_index = 0;
 
-    int x_pos = 320-(15*NCOLS);
+    int x_pos = 320-(15*NCOLS); // start of playing field
 
     for(int i=0; i<NCOLS; i++){
         int y_pos = 0;
@@ -207,12 +208,14 @@ void draw_playing_field()
             if(!tiles[j][i]){
                 draw_block(x_pos+1, y_pos+1, TILE_SIZE-2, TILE_SIZE-2, colors[color_index]);
             }
-            else if (tiles[j][i] == 'h'){
+            else if (tiles[j][i] == 'h'){ // if block has been hit and not removed
                 draw_block(x_pos+1, y_pos+1, TILE_SIZE-2, TILE_SIZE-2, white);
-                tiles[j][i] = 'x';
+                tiles[j][i] = 'x'; // sets block as hit and removed
             }
+
             y_pos += TILE_SIZE;
 
+            // color of next block
             if(color_index == (numColors-1)){
                 color_index = 0;
             }
@@ -295,6 +298,7 @@ void update_game_state()
     }
 
     const unsigned int num_collision_pnts = 4;
+    // array of all four collision points
     unsigned int collision_points[4][2] = {
         {gameBall.pos_x+gameBall.diameter-1, gameBall.pos_y + gameBall.diameter/2},
         {gameBall.pos_x+gameBall.diameter/2, gameBall.pos_y+gameBall.diameter-1},
@@ -388,36 +392,34 @@ void update_game_state()
                 break;
             }
         }
-    // HINT: try to only do this check when we potentially have a hit, as it is relatively expensive and can slow down game play a lot
 }
 
 void update_bar_state() {
     int readValue = ReadUart();
     int remaining = (readValue & 0xFF0000) >> 16;
 
-    if(!(readValue & 0x8000)){ // if ready bit is set
+    if(!(readValue & 0x8000)){ // if ready bit is not set -> return
         return;
     }   
 
     while (remaining >= 0){
         int button = readValue & 0x000000FF; 
-        if (button == 's' && (gameBar.pos_y+gameBar.height/2) <= (height-15)){
+        if (button == 's' && (gameBar.pos_y+gameBar.height/2) <= (height-15)){ // if 's' is pressed and the bar can move down
             gameBar.pos_y += 15;
-            gameBar.changePos = 1;
-            break;
+            gameBar.changePos = 1; // makes sure the bar is drawed again
+            break; // break to change position of bar
         }
-        else if (button == 'w' && (gameBar.pos_y-gameBar.height/2) >= 15){
+        else if (button == 'w' && (gameBar.pos_y-gameBar.height/2) >= 15){ // if 'w' is pressed and the bar can move up
             gameBar.pos_y -= 15;
             gameBar.changePos = 1;
             break;
         }
+
+        // check if there is more input 
         readValue = ReadUart();
         if(!(readValue & 0x8000)) break;
         remaining = (readValue & 0xFF0000) >> 16;
     }
-
-    // HINT: w == 77, s == 73
-    // HINT Format: 0x00 'Remaining Chars':2 'Ready 0x80':2 'Char 0xXX':2, sample: 0x00018077 (1 remaining character, buffer is ready, current character is 'w')
 }
 
 void write(char *str)
@@ -469,7 +471,8 @@ void reset()
 
     if (currentState == Exit) return; 
 
-    write("Resetting...\n");
+    write("\nResetting...");
+    write("\n----------\n");
     // Hint: This is draining the UART buffer
     int remaining = 0;
     
@@ -487,10 +490,10 @@ void reset()
 
     // reset bar and ball position/angle
     gameBar.pos_y = 120;
-    gameBar.changePos = 0;
-    gameBall.angle = 270;
+    gameBar.changePos = 1;
+    gameBall.angle = 45;
     gameBall.pos_x = 120;
-    gameBall.pos_x = 40;
+    gameBall.pos_y = 40;
 
     // reset all tiles as non-destroyed 
     for(int i=0; i<NROWS; i++){
@@ -505,7 +508,9 @@ void reset()
 
 void wait_for_start()
 {
-    write("Write 'w' or 's' to start the game.\nWrite 'e' to exit.\n");
+    write("\nWrite 'w' or 's' to start the game.\nPress enter to exit the game.\n");
+    write("------------------------------------\n");
+
     while (1) {
         int readValue = ReadUart();
         int readyBit = readValue & 0x8000;
@@ -517,10 +522,11 @@ void wait_for_start()
                 int button = readValue & 0x000000FF; 
                 if (button == 'w' || button == 's'){
                     currentState = Running;
-                    write("Started the game!\n");
+                    write("\nStarted the game!\n");
+                    write("------------------\n");
                     return;
                 }
-                else if (button == 'e'){
+                else if (button == '\n'){
                     currentState = Exit;
                     return;
                 }
@@ -529,6 +535,7 @@ void wait_for_start()
                 readValue = ReadUart();
                 remaining = (readValue & 0xFF0000) >> 16;
             }
+            
         }
     }
 }
@@ -538,12 +545,17 @@ int main(int argc, char *argv[])
     // HINT: This loop allows the user to restart the game after loosing/winning the previous game
     while (1)
     {
+        if(NCOLS > 18 || NCOLS < 1){
+            write("\nYou do not have a playable configuration. Fix number of columns to be within range [1, 18] \n");
+            break;
+        }
         wait_for_start();
         play();
         reset();
         if (currentState == Exit)
         {
-            write("Exited the game\n");
+            write("\nExited the game :)\n");
+            write("---------------------\n");
             break;
         }
     }
